@@ -1,3 +1,4 @@
+// 使用 importmap 定义的路径
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { MDLParser } from './MDLParser.js';

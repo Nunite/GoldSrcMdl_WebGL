@@ -171,11 +171,41 @@
         </div>
     </div>
     <script>
-        // 检测是否在 GitHub Pages 环境
-        const isGitHubPages = window.location.hostname.includes('github.io');
-        const basePath = isGitHubPages ? '/GoldSrcMdl_WebGL' : '';
+        // 获取基础路径
+        function getBasePath() {
+            // 获取当前脚本的 URL
+            const scripts = document.getElementsByTagName('script');
+            const currentScript = scripts[scripts.length - 1];
+            const currentUrl = currentScript.src;
+            
+            // 如果是 GitHub Pages 环境
+            if (window.location.hostname.includes('github.io')) {
+                const pathSegments = window.location.pathname.split('/');
+                // 返回项目名作为基础路径
+                return '/' + pathSegments[1];
+            }
+            
+            return '';
+        }
+
+        // 设置基础路径
+        const basePath = getBasePath();
         
-        // 动态创建 script 标签
+        // 设置导入映射
+        const importMap = {
+            imports: {
+                'three': `${basePath}/node_modules/three/build/three.module.js`,
+                'three/examples/jsm/controls/OrbitControls': `${basePath}/node_modules/three/examples/jsm/controls/OrbitControls.js`
+            }
+        };
+
+        // 添加 importmap
+        const importMapScript = document.createElement('script');
+        importMapScript.type = 'importmap';
+        importMapScript.textContent = JSON.stringify(importMap);
+        document.head.appendChild(importMapScript);
+        
+        // 动态创建 script 标签，使用相对路径
         const script = document.createElement('script');
         script.type = 'module';
         script.src = `${basePath}/src/js/main.js`;
