@@ -1,7 +1,7 @@
 // 使用 CDN 导入 Three.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { MDLParser } from '../js/MDLParser.js';
+import { MDLParser } from './MDLParser.js';
 
 let scene, camera, renderer, controls;
 let cornerRenderer;  // 新增右上角渲染器
