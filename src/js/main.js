@@ -1,7 +1,7 @@
-// 使用 importmap 定义的路径
+// 使用 CDN 导入 Three.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { MDLParser } from './MDLParser.js';
+import { MDLParser } from '../js/MDLParser.js';
 
 let scene, camera, renderer, controls;
 let cornerRenderer;  // 新增右上角渲染器
