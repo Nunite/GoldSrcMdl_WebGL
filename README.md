@@ -1,6 +1,6 @@
 # GoldSrc Web Viewer
 
-这是一个基于 Web 技术的 GoldSrc 引擎查看器，允许在浏览器中查看和交互 GoldSrc 引擎的模型和地图。
+这是一个基于 Web 技术的 GoldSrc 引擎查看器，允许在浏览器中查看和交互 GoldSrc 引擎的模型。
 
 ## 功能特点
 
@@ -58,7 +58,7 @@ yarn build
 
 # GoldSrc Web Viewer (English)
 
-A web-based viewer for GoldSrc engine models and maps, allowing you to view and interact with GoldSrc engine content directly in your browser.
+A web-based viewer for GoldSrc engine models, allowing you to view and interact with GoldSrc engine content directly in your browser.
 
 ## Features
 

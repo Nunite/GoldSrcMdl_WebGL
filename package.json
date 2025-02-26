@@ -2,7 +2,7 @@
   "name": "goldsrc-web-viewer",
   "version": "1.0.0",
   "description": "GoldSrc MDL model viewer using Three.js",
-  "main": "src/js/main.js",
+  "main": "/src/js/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
