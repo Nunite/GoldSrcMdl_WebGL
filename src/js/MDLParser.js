@@ -7,6 +7,7 @@ export class MDLParser {
         this.currentRotation = { x: -Math.PI / 2, y: 0, z: 0 };  // 默认 X 轴旋转 -90 度
         this.currentScale = 0.1;
         this.renderMode = 'textured';  // 'textured' 或 'wireframe'
+        this.textureSizes = {};
     }
 
     // 读取基本数据类型
@@ -289,20 +290,25 @@ export class MDLParser {
             const height = this.readInt32();
             const dataOffset = this.readInt32();
 
+            // 存储纹理信息
             textures.push({
                 name,
                 flags,
                 width,
                 height,
-                dataOffset
+                dataOffset,
+                index: i  // 添加索引信息
             });
+
+            // 记录纹理尺寸映射
+            this.textureSizes[i] = { width, height };
         }
 
         return textures;
     }
 
     // 解析网格数据
-    parseMeshData(triOffset, triCount) {
+    parseMeshData(triOffset, triCount, skinRef) {
         const savedOffset = this.offset;
         
         try {
@@ -311,6 +317,9 @@ export class MDLParser {
             const triangles = [];
             const uvs = [];
             let totalTriangles = 0;
+            
+            // 获取当前使用的纹理尺寸
+            const textureSize = this.textureSizes[skinRef] || { width: 1, height: 1 };
             
             while (true) {
                 const trivertCount = this.readInt16();
@@ -323,12 +332,19 @@ export class MDLParser {
                 for (let i = 0; i < absCount; i++) {
                     const vertexIndex = this.readUint16();
                     const normalIndex = this.readUint16();
-                    const u = this.readUint16();
-                    const v = this.readUint16();
-                    triverts.push({ vertexIndex, normalIndex, u, v });
+                    const s = this.readUint16();
+                    const t = this.readUint16();
+                    
+                    // 存储原始 UV 坐标，不进行标准化
+                    triverts.push({ 
+                        vertexIndex, 
+                        normalIndex, 
+                        s,
+                        t
+                    });
                 }
                 
-                // 如果是三角形扇形，转换为独立三角形
+                // 处理三角形扇形
                 if (isFan) {
                     for (let i = 1; i < absCount - 1; i++) {
                         triangles.push([
@@ -337,14 +353,14 @@ export class MDLParser {
                             triverts[i + 1].vertexIndex
                         ]);
                         uvs.push([
-                            { u: triverts[0].u, v: triverts[0].v },
-                            { u: triverts[i].u, v: triverts[i].v },
-                            { u: triverts[i + 1].u, v: triverts[i + 1].v }
+                            { s: triverts[0].s, t: triverts[0].t },
+                            { s: triverts[i].s, t: triverts[i].t },
+                            { s: triverts[i + 1].s, t: triverts[i + 1].t }
                         ]);
                         totalTriangles++;
                     }
                 } else {
-                    // 如果是三角形带，转换为独立三角形
+                    // 处理三角形带
                     for (let i = 0; i < absCount - 2; i++) {
                         if (i % 2 === 0) {
                             triangles.push([
@@ -353,9 +369,9 @@ export class MDLParser {
                                 triverts[i + 2].vertexIndex
                             ]);
                             uvs.push([
-                                { u: triverts[i].u, v: triverts[i].v },
-                                { u: triverts[i + 1].u, v: triverts[i + 1].v },
-                                { u: triverts[i + 2].u, v: triverts[i + 2].v }
+                                { s: triverts[i].s, t: triverts[i].t },
+                                { s: triverts[i + 1].s, t: triverts[i + 1].t },
+                                { s: triverts[i + 2].s, t: triverts[i + 2].t }
                             ]);
                         } else {
                             triangles.push([
@@ -364,9 +380,9 @@ export class MDLParser {
                                 triverts[i + 1].vertexIndex
                             ]);
                             uvs.push([
-                                { u: triverts[i].u, v: triverts[i].v },
-                                { u: triverts[i + 2].u, v: triverts[i + 2].v },
-                                { u: triverts[i + 1].u, v: triverts[i + 1].v }
+                                { s: triverts[i].s, t: triverts[i].t },
+                                { s: triverts[i + 2].s, t: triverts[i + 2].t },
+                                { s: triverts[i + 1].s, t: triverts[i + 1].t }
                             ]);
                         }
                         totalTriangles++;
@@ -374,15 +390,9 @@ export class MDLParser {
                 }
             }
             
-            return { triangles, uvs };
+            return { triangles, uvs, skinRef };
         } catch (error) {
-            console.error('Error parsing mesh data:', {
-                error: error.message,
-                stack: error.stack,
-                offset: this.offset,
-                triOffset,
-                triCount
-            });
+            console.error('Error parsing mesh data:', error);
             throw error;
         } finally {
             this.offset = savedOffset;
@@ -508,7 +518,7 @@ export class MDLParser {
                         const meshNormalCount = this.readInt32();
                         const meshNormalOffset = this.readInt32();
 
-                        const { triangles, uvs } = this.parseMeshData(triOffset, triCount);
+                        const { triangles, uvs } = this.parseMeshData(triOffset, triCount, skinRef);
 
                         meshes.push({
                             triangles,
@@ -633,60 +643,42 @@ export class MDLParser {
 
     // 创建 Three.js 几何体
     createGeometry(model, textures) {
-        const validVertices = new Array(model.vertices.length).fill(false);
-        const validNormals = new Array(model.normals.length).fill(false);
-        
-        for (let i = 0; i < model.vertices.length; i++) {
-            if (model.vertices[i] && model.vertices[i].isVector3) {
-                validVertices[i] = true;
-            }
-        }
-        
-        for (let i = 0; i < model.normals.length; i++) {
-            if (model.normals[i] && model.normals[i].isVector3) {
-                validNormals[i] = true;
-            }
-        }
-
-        const finalPositions = [];
-        const finalNormals = [];
-        const finalUvs = [];
-        const finalIndices = [];
-        const finalSkinIndices = [];
-        const finalSkinWeights = [];
-
-        let vertexCount = 0;
-        let skippedTriangles = 0;
+        // 为每个网格创建独立的几何体
+        const meshGeometries = [];
 
         for (const mesh of model.meshes) {
-            const texture = textures[mesh.skinRef] || textures[0];
+            const texture = textures[mesh.skinRef];
             if (!texture) {
                 console.warn('No texture found for mesh:', mesh.skinRef);
                 continue;
             }
+
+            const finalPositions = [];
+            const finalNormals = [];
+            const finalUvs = [];
+            const finalIndices = [];
+            const finalSkinIndices = [];
+            const finalSkinWeights = [];
+            let vertexCount = 0;
 
             for (let i = 0; i < mesh.triangles.length; i++) {
                 const triangle = mesh.triangles[i];
                 const uvs = mesh.uvs[i];
 
                 if (!triangle || !uvs || triangle.length !== 3 || uvs.length !== 3) {
-                    skippedTriangles++;
                     continue;
                 }
 
                 let isValidTriangle = true;
                 for (let j = 0; j < 3; j++) {
                     const vertexIndex = triangle[j];
-                    if (vertexIndex < 0 || vertexIndex >= model.vertices.length || !validVertices[vertexIndex]) {
+                    if (vertexIndex < 0 || vertexIndex >= model.vertices.length || !model.vertices[vertexIndex]) {
                         isValidTriangle = false;
                         break;
                     }
                 }
 
-                if (!isValidTriangle) {
-                    skippedTriangles++;
-                    continue;
-                }
+                if (!isValidTriangle) continue;
 
                 for (let j = 0; j < 3; j++) {
                     const vertexIndex = triangle[j];
@@ -697,19 +689,16 @@ export class MDLParser {
 
                     finalPositions.push(vertex.x, vertex.y, vertex.z);
                     
-                    if (normal && validNormals[vertexIndex]) {
+                    if (normal) {
                         finalNormals.push(normal.x, normal.y, normal.z);
                     } else {
                         finalNormals.push(0, 1, 0);
                     }
                     
-                    if (uv && typeof uv.u === 'number' && typeof uv.v === 'number') {
-                        const u = uv.u / texture.width;
-                        const v = uv.v / texture.height;
-                        
+                    if (uv && typeof uv.s === 'number' && typeof uv.t === 'number') {
                         finalUvs.push(
-                            Math.max(0, Math.min(1, u)),
-                            Math.max(0, Math.min(1, 1 - v))
+                            uv.s / texture.width,
+                            1 - (uv.t / texture.height)
                         );
                     } else {
                         finalUvs.push(0, 0);
@@ -720,21 +709,25 @@ export class MDLParser {
                     finalIndices.push(vertexCount++);
                 }
             }
+
+            if (finalPositions.length === 0) continue;
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(finalPositions, 3));
+            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(finalNormals, 3));
+            geometry.setAttribute('uv', new THREE.Float32BufferAttribute(finalUvs, 2));
+            geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(finalSkinIndices, 4));
+            geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(finalSkinWeights, 4));
+            geometry.setIndex(finalIndices);
+
+            // 存储几何体和对应的纹理引用
+            meshGeometries.push({
+                geometry,
+                skinRef: mesh.skinRef
+            });
         }
 
-        if (finalPositions.length === 0) {
-            return new THREE.PlaneGeometry(1, 1);
-        }
-
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(finalPositions), 3));
-        geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(finalNormals), 3));
-        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(finalUvs), 2));
-        geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(finalSkinIndices), 4));
-        geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(finalSkinWeights), 4));
-        geometry.setIndex(finalIndices);
-
-        return geometry;
+        return meshGeometries;
     }
 
     // 设置模型旋转（弧度）
@@ -1000,69 +993,48 @@ export class MDLParser {
             try {
                 const textureData = this.parseTextureData(texture, header);
                 const threeTexture = this.createTexture(textureData, texture.width, texture.height);
+                threeTexture.name = texture.name;
                 textureObjects.push(threeTexture);
             } catch (error) {
-                console.warn('Error processing texture:', {
-                    name: texture.name,
-                    error: error.message,
-                    stack: error.stack
-                });
-                // 创建默认纹理
+                console.warn('Error processing texture:', error);
                 const defaultTexture = new THREE.DataTexture(
                     new Uint8Array([128, 128, 128, 255]),
-                    1,
-                    1,
-                    THREE.RGBAFormat,
-                    THREE.UnsignedByteType
+                    1, 1, THREE.RGBAFormat
                 );
-                defaultTexture.needsUpdate = true;
+                defaultTexture.name = 'default';
                 textureObjects.push(defaultTexture);
             }
-        }
-
-        // 创建材质
-        const materials = textureObjects.map((texture, index) => {
-            try {
-                const material = this.createMaterial(texture);
-                return material;
-            } catch (error) {
-                console.warn(`Error creating material ${index}:`, error);
-                return this.createDefaultMaterial();
-            }
-        });
-
-        // 如果没有纹理，使用默认材质
-        if (materials.length === 0) {
-            materials.push(this.createDefaultMaterial());
         }
 
         // 为每个身体部件创建网格
         for (const bodyPart of bodyParts) {
             for (const model of bodyPart.models) {
-                const geometry = this.createGeometry(model, textures);
+                // 获取所有网格的几何体
+                const meshGeometries = this.createGeometry(model, textures);
                 
-                // 为每个网格使用对应的材质
-                for (const mesh of model.meshes) {
-                    const material = materials[mesh.skinRef] || materials[0];
-                    const threeMesh = new THREE.SkinnedMesh(geometry, material);
+                // 为每个网格创建独立的 Mesh
+                for (const meshData of meshGeometries) {
+                    const texture = textureObjects[meshData.skinRef];
+                    const material = this.createMaterial(texture);
+                    
+                    const mesh = new THREE.Mesh(meshData.geometry, material);
+                    mesh.name = `mesh_${meshData.skinRef}`;
                     
                     // 设置缩放
-                    threeMesh.scale.set(scale, scale, scale);
-                    
-                    threeMesh.add(rootBone);
-                    threeMesh.bind(skeleton);
-
-                    // 更新矩阵
-                    threeMesh.updateMatrixWorld(true);
+                    mesh.scale.set(this.currentScale, this.currentScale, this.currentScale);
                     
                     // 添加到模型组
-                    group.add(threeMesh);
+                    group.add(mesh);
                 }
             }
         }
 
         // 设置模型组的旋转
-        group.rotation.set(rotationX, rotationY, rotationZ);
+        group.rotation.set(
+            this.currentRotation.x,
+            this.currentRotation.y,
+            this.currentRotation.z
+        );
 
         // 更新整个组的矩阵
         group.updateMatrixWorld(true);
