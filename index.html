@@ -58,6 +58,16 @@
                 <input type="number" id="scale-value" min="0.01" max="1" step="0.01" value="0.1">
             </div>
         </div>
+        <div class="control-group">
+            <label>导出模型</label>
+            <div class="export-info">导出格式说明：</div>
+            <ul class="export-info-list">
+                <li>GLB 格式（包含模型和纹理的单文件）</li>
+            </ul>
+            <div class="export-buttons">
+                <button onclick="exportModel('gltf')" class="export-btn">导出 GLB</button>
+            </div>
+        </div>
     </div>
     <script>
         // 添加面板切换功能
@@ -83,6 +93,9 @@
             imports: {
                 'three': 'https://unpkg.com/three@0.160.0/build/three.module.js',
                 'three/examples/jsm/controls/OrbitControls': 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js',
+                'three/examples/jsm/exporters/GLTFExporter': 'https://unpkg.com/three@0.160.0/examples/jsm/exporters/GLTFExporter.js',
+                'three/examples/jsm/exporters/OBJExporter': 'https://unpkg.com/three@0.160.0/examples/jsm/exporters/OBJExporter.js',
+                'three/examples/jsm/exporters/FBXExporter': 'https://unpkg.com/three@0.160.0/examples/jsm/exporters/FBXExporter.js',
                 './MDLParser.js': `${basePath}/src/js/MDLParser.js`
             }
         };

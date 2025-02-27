@@ -171,4 +171,74 @@ canvas {
 
 .radio-group input[type="radio"] {
     cursor: pointer;
+}
+
+.export-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.export-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 12px;
+    background: #4a9eff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.export-btn:hover {
+    background: #2486ff;
+}
+
+.export-btn:active {
+    background: #1a76e8;
+}
+
+/* 添加导出状态提示样式 */
+.export-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    border-radius: 4px;
+    z-index: 1000;
+    display: none;
+}
+
+.export-status.show {
+    display: block;
+    animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.export-info {
+    font-size: 12px;
+    color: #cccccc;
+    margin-bottom: 5px;
+}
+
+.export-info-list {
+    margin: 0 0 10px 20px;
+    padding: 0;
+    font-size: 12px;
+    color: #cccccc;
+}
+
+.export-info-list li {
+    margin-bottom: 3px;
 } 

@@ -1,7 +1,14 @@
 // 使用 CDN 导入 Three.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { MDLParser } from './MDLParser.js';
+
+// 添加 JSZip 库
+const script = document.createElement('script');
+script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+document.head.appendChild(script);
 
 let scene, camera, renderer, controls;
 let cornerRenderer;  // 新增右上角渲染器
@@ -278,6 +285,86 @@ function animate() {
         // 渲染右上角坐标轴
         cornerRenderer.render(cornerScene, cornerCamera);
     }
+}
+
+// 简化导出功能
+window.exportModel = async function(format) {
+    if (!currentModel) {
+        showExportStatus('请先加载模型！', true);
+        return;
+    }
+
+    try {
+        const gltfExporter = new GLTFExporter();
+        const result = await new Promise((resolve, reject) => {
+            gltfExporter.parse(currentModel, 
+                (gltf) => resolve(gltf),
+                (error) => reject(error),
+                { 
+                    binary: true,
+                    embedImages: true // 嵌入纹理
+                }
+            );
+        });
+
+        // 下载 GLB 文件
+        const blob = new Blob([result], { type: 'application/octet-stream' });
+        downloadFile(blob, 'model.glb');
+
+        showExportStatus('模型已成功导出为 GLB 格式');
+    } catch (error) {
+        console.error('导出错误:', error);
+        showExportStatus(`导出失败: ${error.message}`, true);
+    }
+}
+
+// 将纹理转换为图片数据
+async function textureToImage(texture) {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = texture.image.width;
+        canvas.height = texture.image.height;
+        const context = canvas.getContext('2d');
+        context.drawImage(texture.image, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+// 下载文件
+function downloadFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// 显示导出状态提示
+function showExportStatus(message, isError = false) {
+    let statusElement = document.querySelector('.export-status');
+    if (!statusElement) {
+        statusElement = document.createElement('div');
+        statusElement.className = 'export-status';
+        document.body.appendChild(statusElement);
+    }
+
+    statusElement.textContent = message;
+    statusElement.style.background = isError ? 'rgba(255,0,0,0.8)' : 'rgba(0,0,0,0.8)';
+    statusElement.classList.add('show');
+
+    // 移除动画类并重新添加以触发动画
+    void statusElement.offsetWidth;
+    statusElement.classList.remove('show');
+    void statusElement.offsetWidth;
+    statusElement.classList.add('show');
+
+    // 3秒后隐藏提示
+    setTimeout(() => {
+        statusElement.classList.remove('show');
+    }, 3000);
 }
 
 // 启动应用
