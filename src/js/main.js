@@ -4,11 +4,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { MDLParser } from './MDLParser.js';
 
-// 添加 JSZip 库
-const script = document.createElement('script');
-script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-document.head.appendChild(script);
-
 let scene, camera, renderer, controls;
 let cornerRenderer;  // 新增右上角渲染器
 let mdlParser;

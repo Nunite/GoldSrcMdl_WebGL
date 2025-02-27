@@ -113,15 +113,22 @@
         // 设置基础路径
         const basePath = getBasePath();
         
-        // 设置导入映射
+        // 根据环境设置不同的导入映射
         const importMap = {
-            imports: {
+            imports: window.location.hostname.includes('github.io') ? {
+                // GitHub Pages 环境 - 使用 CDN
                 'three': 'https://unpkg.com/three@0.160.0/build/three.module.js',
                 'three/examples/jsm/controls/OrbitControls': 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js',
                 'three/examples/jsm/exporters/GLTFExporter': 'https://unpkg.com/three@0.160.0/examples/jsm/exporters/GLTFExporter.js',
                 'three/examples/jsm/exporters/OBJExporter': 'https://unpkg.com/three@0.160.0/examples/jsm/exporters/OBJExporter.js',
-                'three/examples/jsm/exporters/FBXExporter': 'https://unpkg.com/three@0.160.0/examples/jsm/exporters/FBXExporter.js',
                 './MDLParser.js': `${basePath}/src/js/MDLParser.js`
+            } : {
+                // 本地开发环境 - 使用本地文件
+                'three': '/node_modules/three/build/three.module.js',
+                'three/examples/jsm/controls/OrbitControls': '/node_modules/three/examples/jsm/controls/OrbitControls.js',
+                'three/examples/jsm/exporters/GLTFExporter': '/node_modules/three/examples/jsm/exporters/GLTFExporter.js',
+                'three/examples/jsm/exporters/OBJExporter': '/node_modules/three/examples/jsm/exporters/OBJExporter.js',
+                './MDLParser.js': '/src/js/MDLParser.js'
             }
         };
 
