@@ -15,6 +15,9 @@ let cornerRenderer;  // 新增右上角渲染器
 let mdlParser;
 let currentModel;
 let cornerAxesHelper, cornerCamera, cornerScene;
+let mixer;  // 添加动画混合器
+let clock;  // 添加时钟对象
+let currentActions = [];  // 当前动画动作列表
 
 // 初始化场景
 function init() {
@@ -57,6 +60,9 @@ function init() {
 
     // 创建MDL解析器
     mdlParser = new MDLParser();
+
+    // 创建时钟对象
+    clock = new THREE.Clock();
 
     // 添加窗口大小变化监听
     window.addEventListener('resize', onWindowResize, false);
@@ -116,6 +122,35 @@ function updateControlValues(rotation, scale) {
     // 更新缩放控件
     document.getElementById('scale').value = scale;
     document.getElementById('scale-value').value = scale;
+}
+
+// 更新动画控制界面
+function updateAnimationControls(actions) {
+    const animationSelect = document.getElementById('animation-select');
+    const animationControls = document.getElementById('animation-controls');
+    
+    // 清空现有选项
+    animationSelect.innerHTML = '';
+    
+    if (actions && actions.length > 0) {
+        // 显示动画控制界面
+        animationControls.style.display = 'block';
+        
+        // 添加动画选项
+        actions.forEach((action, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = action.getClip().name || `动画 ${index + 1}`;
+            animationSelect.appendChild(option);
+        });
+        
+        // 更新当前动画列表
+        currentActions = actions;
+    } else {
+        // 隐藏动画控制界面
+        animationControls.style.display = 'none';
+        currentActions = [];
+    }
 }
 
 // 设置控制界面的事件处理
@@ -192,13 +227,24 @@ function setupControls() {
                 if (currentModel) {
                     scene.remove(currentModel);
                 }
-                // 解析并添加新模型，设置默认旋转为 X 轴 -90 度
+                
+                // 停止之前的动画混合器
+                if (mixer) {
+                    mixer.stopAllAction();
+                }
+                
+                // 解析并添加新模型
                 const result = await mdlParser.parse(buffer, {
                     rotationX: -Math.PI / 2,
                     rotationY: 0,
                     rotationZ: 0
                 });
+                
                 currentModel = result.group;
+                mixer = result.mixer;  // 保存新的动画混合器
+                
+                // 更新动画控制界面
+                updateAnimationControls(result.actions);
 
                 // 计算模型包围盒
                 const box = new THREE.Box3().setFromObject(currentModel);
@@ -249,6 +295,62 @@ function setupControls() {
     });
 }
 
+// 设置动画控制界面的事件处理
+function setupAnimationControls() {
+    const animationSelect = document.getElementById('animation-select');
+    const playButton = document.getElementById('animation-play');
+    const stopButton = document.getElementById('animation-stop');
+    const speedControl = document.getElementById('animation-speed');
+    const loopToggle = document.getElementById('animation-loop');
+    
+    // 动画选择
+    animationSelect.addEventListener('change', (e) => {
+        const index = parseInt(e.target.value);
+        if (currentActions[index]) {
+            // 停止所有动画
+            currentActions.forEach(action => action.stop());
+            // 播放选中的动画
+            const action = currentActions[index];
+            action.setLoop(loopToggle.checked ? THREE.LoopRepeat : THREE.LoopOnce);
+            action.setEffectiveTimeScale(parseFloat(speedControl.value));
+            action.play();
+        }
+    });
+    
+    // 播放按钮
+    playButton.addEventListener('click', () => {
+        const index = parseInt(animationSelect.value);
+        if (currentActions[index]) {
+            currentActions[index].play();
+        }
+    });
+    
+    // 停止按钮
+    stopButton.addEventListener('click', () => {
+        const index = parseInt(animationSelect.value);
+        if (currentActions[index]) {
+            currentActions[index].stop();
+        }
+    });
+    
+    // 速度控制
+    speedControl.addEventListener('input', (e) => {
+        const speed = parseFloat(e.target.value);
+        const index = parseInt(animationSelect.value);
+        if (currentActions[index]) {
+            currentActions[index].setEffectiveTimeScale(speed);
+        }
+    });
+    
+    // 循环控制
+    loopToggle.addEventListener('change', (e) => {
+        const index = parseInt(animationSelect.value);
+        if (currentActions[index]) {
+            currentActions[index].setLoop(e.target.checked ? THREE.LoopRepeat : THREE.LoopOnce);
+        }
+    });
+}
+
 // 窗口大小变化处理
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -269,9 +371,16 @@ function onWindowResize() {
     }
 }
 
-// 动画循环
+// 修改动画循环函数
 function animate() {
     requestAnimationFrame(animate);
+    
+    // 更新动画混合器
+    if (mixer) {
+        const delta = clock.getDelta();
+        mixer.update(delta);
+    }
+    
     controls.update();
     
     // 主场景渲染
@@ -279,10 +388,7 @@ function animate() {
     
     // 如果右上角坐标轴已初始化，则渲染它
     if (cornerAxesHelper) {
-        // 更新右上角坐标轴的旋转以匹配主场景相机
         cornerAxesHelper.rotation.copy(camera.rotation);
-        
-        // 渲染右上角坐标轴
         cornerRenderer.render(cornerScene, cornerCamera);
     }
 }
@@ -370,4 +476,5 @@ function showExportStatus(message, isError = false) {
 // 启动应用
 init();
 setupControls();
+setupAnimationControls();  // 添加动画控制界面设置
 animate(); 

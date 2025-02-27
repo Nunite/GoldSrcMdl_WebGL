@@ -241,4 +241,79 @@ canvas {
 
 .export-info-list li {
     margin-bottom: 3px;
+}
+
+/* 添加动画控制样式 */
+#animation-controls {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.animation-select {
+    margin-bottom: 15px;
+}
+
+.animation-select select {
+    width: 100%;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 4px;
+}
+
+.animation-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.animation-buttons button {
+    flex: 1;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.animation-buttons button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.animation-settings {
+    margin-top: 10px;
+}
+
+.animation-settings .control-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+.animation-settings label {
+    flex: 0 0 auto;
+    min-width: 80px;
+    color: #ccc;
+}
+
+.animation-settings input[type="range"] {
+    flex: 1;
+}
+
+.animation-settings .speed-value {
+    flex: 0 0 40px;
+    text-align: right;
+    color: #ccc;
+}
+
+.animation-settings input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
 } 
