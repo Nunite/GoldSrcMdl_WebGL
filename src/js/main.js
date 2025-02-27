@@ -1,8 +1,7 @@
 // 使用 CDN 导入 Three.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { MDLParser } from './MDLParser.js';
 
 // 添加 JSZip 库
