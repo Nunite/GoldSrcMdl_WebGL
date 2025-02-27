@@ -560,85 +560,220 @@ export class MDLParser {
         return bodyParts;
     }
 
-    // 解析纹理数据
+    // 添加纹理标志常量
+    static TextureFlags = {
+        FLAT_SHADE: 0x0001,
+        CHROME: 0x0002,
+        FULL_BRIGHT: 0x0004,
+        NO_MIPS: 0x0008,
+        ALPHA: 0x0010,
+        ADDITIVE: 0x0020,
+        MASKED: 0x0040
+    };
+
+    // 修改纹理数据解析函数
     parseTextureData(texture, header) {
-        const { width, height, dataOffset, name } = texture;
+        const { width, height, dataOffset, name, flags } = texture;
         
         const savedOffset = this.offset;
         
         try {
-            this.offset = dataOffset;
-            
-            // 读取索引数据
-            const indices = new Uint8Array(width * height);
-            for (let i = 0; i < width * height; i++) {
-                indices[i] = this.readUint8();
+            // 验证纹理尺寸
+            if (width <= 0 || height <= 0 || width > 2048 || height > 2048) {
+                console.warn(`Invalid texture dimensions for ${name}: ${width}x${height}, using default texture`);
+                return this.createDefaultTextureData(Math.min(width, 2048), Math.min(height, 2048));
             }
-            
-            // 读取调色板数据
-            const palette = new Uint8Array(256 * 3);
-            for (let i = 0; i < 256 * 3; i++) {
-                palette[i] = this.readUint8();
+
+            // v10 版本的纹理数据偏移计算
+            let textureStart;
+            if (header.version === 10) {
+                // v10 版本使用相对偏移
+                textureStart = dataOffset;
+                if (textureStart <= 0) {
+                    console.warn(`Invalid texture data offset for ${name}: ${textureStart}, using default texture`);
+                    return this.createDefaultTextureData(width, height);
+                }
+            } else {
+                // 其他版本使用绝对偏移
+                textureStart = header.textureDataOffset + dataOffset;
             }
-            
-            // 创建RGBA颜色数据
-            const colors = new Uint8Array(width * height * 4);
-            
-            // 检查是否有透明度
-            const hasTransparency = name.includes('{');
-            const transparencyKey = hasTransparency ? palette.slice(-3) : null;
-            
-            for (let i = 0; i < width * height; i++) {
-                const index = indices[i];
-                const baseColorIndex = index * 3;
-                const baseOutputIndex = i * 4;
+
+            // 验证偏移是否有效
+            if (textureStart >= this.dataView.byteLength) {
+                console.warn(`Texture data offset out of bounds for ${name}: ${textureStart}, using default texture`);
+                return this.createDefaultTextureData(width, height);
+            }
+
+            // 计算所需的缓冲区大小
+            const requiredSize = width * height + 256 * 3; // 索引数据 + 调色板数据
+            const availableSize = this.dataView.byteLength - textureStart;
+
+            // 检查是否有足够的数据
+            if (availableSize < requiredSize) {
+                console.warn(`Texture data truncated for ${name}, available: ${availableSize}, required: ${requiredSize}`);
+                return this.readPartialTextureData(textureStart, width, height, availableSize);
+            }
+
+            this.offset = textureStart;
+
+            try {
+                // 读取索引数据
+                const indices = this.readUint8Array(width * height);
                 
-                // 检查是否是透明像素
-                if (hasTransparency && 
-                    palette[baseColorIndex] === transparencyKey[0] &&
-                    palette[baseColorIndex + 1] === transparencyKey[1] &&
-                    palette[baseColorIndex + 2] === transparencyKey[2]) {
-                    // 透明像素
-                    colors[baseOutputIndex] = 0;
-                    colors[baseOutputIndex + 1] = 0;
-                    colors[baseOutputIndex + 2] = 0;
-                    colors[baseOutputIndex + 3] = 0;
-                } else {
-                    // 不透明像素
-                    colors[baseOutputIndex] = palette[baseColorIndex];
-                    colors[baseOutputIndex + 1] = palette[baseColorIndex + 1];
-                    colors[baseOutputIndex + 2] = palette[baseColorIndex + 2];
-                    colors[baseOutputIndex + 3] = 255;
+                // 读取调色板数据
+                const palette = this.readUint8Array(256 * 3);
+                
+                // 创建RGBA颜色数据
+                const colors = new Uint8Array(width * height * 4);
+                
+                // 检查纹理标志
+                const isMasked = (flags & MDLParser.TextureFlags.MASKED) !== 0;
+                const isAdditive = (flags & MDLParser.TextureFlags.ADDITIVE) !== 0;
+                const isAlpha = (flags & MDLParser.TextureFlags.ALPHA) !== 0;
+                
+                // v10 版本的特殊处理
+                const isV10 = header.version === 10;
+                
+                for (let i = 0; i < width * height; i++) {
+                    const index = indices[i];
+                    if (index >= 256) continue;
+                    
+                    const baseColorIndex = index * 3;
+                    const baseOutputIndex = i * 4;
+                    
+                    const r = palette[baseColorIndex];
+                    const g = palette[baseColorIndex + 1];
+                    const b = palette[baseColorIndex + 2];
+                    
+                    // v10 版本的特殊颜色处理
+                    if (isV10) {
+                        if (index === 255) {
+                            // v10 版本中 255 是完全透明
+                            colors[baseOutputIndex] = 0;
+                            colors[baseOutputIndex + 1] = 0;
+                            colors[baseOutputIndex + 2] = 0;
+                            colors[baseOutputIndex + 3] = 0;
+                            continue;
+                        }
+                    }
+                    
+                    // 处理不同类型的纹理
+                    if (isMasked && r === 0 && g === 0 && b === 255) {
+                        // 遮罩纹理的透明部分
+                        colors[baseOutputIndex] = 0;
+                        colors[baseOutputIndex + 1] = 0;
+                        colors[baseOutputIndex + 2] = 0;
+                        colors[baseOutputIndex + 3] = 0;
+                    } else if (isAdditive) {
+                        // 加法混合纹理
+                        colors[baseOutputIndex] = r;
+                        colors[baseOutputIndex + 1] = g;
+                        colors[baseOutputIndex + 2] = b;
+                        colors[baseOutputIndex + 3] = Math.max(r, g, b);
+                    } else if (isAlpha) {
+                        // Alpha 纹理
+                        colors[baseOutputIndex] = r;
+                        colors[baseOutputIndex + 1] = g;
+                        colors[baseOutputIndex + 2] = b;
+                        colors[baseOutputIndex + 3] = (r + g + b) / 3;
+                    } else {
+                        // 普通纹理
+                        colors[baseOutputIndex] = r;
+                        colors[baseOutputIndex + 1] = g;
+                        colors[baseOutputIndex + 2] = b;
+                        colors[baseOutputIndex + 3] = 255;
+                    }
                 }
-            }
-            
-            // 垂直翻转图像数据
-            const flippedColors = new Uint8Array(width * height * 4);
-            for (let y = 0; y < height; y++) {
-                const srcRow = (height - 1 - y) * width * 4;
-                const dstRow = y * width * 4;
-                for (let x = 0; x < width * 4; x++) {
-                    flippedColors[dstRow + x] = colors[srcRow + x];
+                
+                // 垂直翻转图像数据
+                const flippedColors = new Uint8Array(width * height * 4);
+                for (let y = 0; y < height; y++) {
+                    const srcRow = (height - 1 - y) * width * 4;
+                    const dstRow = y * width * 4;
+                    for (let x = 0; x < width * 4; x++) {
+                        flippedColors[dstRow + x] = colors[srcRow + x];
+                    }
                 }
+                
+                return flippedColors;
+            } catch (error) {
+                console.warn(`Error processing texture ${name}:`, error);
+                return this.createDefaultTextureData(width, height);
             }
-            
-            return flippedColors;
             
         } catch (error) {
-            console.warn('Error reading texture data:', error);
-            // 返回默认纹理数据（灰色）
-            const defaultColors = new Uint8Array(width * height * 4);
-            for (let i = 0; i < width * height; i++) {
-                const baseIndex = i * 4;
-                defaultColors[baseIndex] = 128;
-                defaultColors[baseIndex + 1] = 128;
-                defaultColors[baseIndex + 2] = 128;
-                defaultColors[baseIndex + 3] = 255;
-            }
-            return defaultColors;
+            console.warn(`Error reading texture ${name}:`, error);
+            return this.createDefaultTextureData(width, height);
         } finally {
             this.offset = savedOffset;
         }
+    }
+
+    // 读取部分纹理数据
+    readPartialTextureData(offset, width, height, availableSize) {
+        this.offset = offset;
+        const colors = new Uint8Array(width * height * 4);
+        
+        try {
+            // 计算可以读取的像素数量
+            const maxPixels = Math.floor((availableSize - 768) / 1); // 减去调色板大小
+            const pixelCount = Math.min(width * height, maxPixels);
+            
+            // 读取可用的索引数据
+            const indices = this.readUint8Array(pixelCount);
+            
+            // 读取调色板数据
+            const palette = this.readUint8Array(Math.min(256 * 3, availableSize - pixelCount));
+            
+            // 填充颜色数据
+            for (let i = 0; i < pixelCount; i++) {
+                const index = indices[i];
+                if (index >= palette.length / 3) continue;
+                
+                const baseColorIndex = index * 3;
+                const baseOutputIndex = i * 4;
+                
+                colors[baseOutputIndex] = palette[baseColorIndex];
+                colors[baseOutputIndex + 1] = palette[baseColorIndex + 1];
+                colors[baseOutputIndex + 2] = palette[baseColorIndex + 2];
+                colors[baseOutputIndex + 3] = 255;
+            }
+            
+            // 填充剩余部分为默认颜色
+            for (let i = pixelCount; i < width * height; i++) {
+                const baseIndex = i * 4;
+                colors[baseIndex] = 128;
+                colors[baseIndex + 1] = 128;
+                colors[baseIndex + 2] = 128;
+                colors[baseIndex + 3] = 255;
+            }
+            
+            return colors;
+        } catch (error) {
+            console.warn('Error reading partial texture data:', error);
+            return this.createDefaultTextureData(width, height);
+        }
+    }
+
+    // 创建默认纹理数据
+    createDefaultTextureData(width, height) {
+        const defaultColors = new Uint8Array(width * height * 4);
+        const checkerSize = 8; // 棋盘格大小
+        
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const baseIndex = (y * width + x) * 4;
+                const isChecker = ((Math.floor(x / checkerSize) + Math.floor(y / checkerSize)) % 2) === 0;
+                const color = isChecker ? 128 : 64; // 深浅灰色交替
+                
+                defaultColors[baseIndex] = color;
+                defaultColors[baseIndex + 1] = color;
+                defaultColors[baseIndex + 2] = color;
+                defaultColors[baseIndex + 3] = 255;
+            }
+        }
+        
+        return defaultColors;
     }
 
     // 创建 Three.js 几何体
@@ -866,7 +1001,7 @@ export class MDLParser {
         return this.renderMode;
     }
 
-    // 创建材质
+    // 修改材质创建函数
     createMaterial(texture) {
         const material = new THREE.MeshStandardMaterial({
             map: this.renderMode === 'textured' ? texture : null,
@@ -875,26 +1010,22 @@ export class MDLParser {
             side: THREE.DoubleSide,
             metalness: 0.0,
             roughness: 0.8,
-            envMapIntensity: 1.0
+            envMapIntensity: 1.0,
+            transparent: true,
+            alphaTest: 0.5
         });
-
-        // 如果纹理有透明度，设置材质透明
-        if (texture.hasTransparency && this.renderMode === 'textured') {
-            material.transparent = true;
-            material.alphaTest = 0.5;
-            material.depthWrite = false;  // 对于透明材质，禁用深度写入
-        }
-
-        // 线框模式下的特殊设置
-        if (this.renderMode === 'wireframe') {
-            material.wireframeLinewidth = 1;
-            material.wireframeLinecap = 'round';
-            material.wireframeLinejoin = 'round';
-        }
 
         // 设置材质参数
         material.needsUpdate = true;
         material.name = texture.name || 'MDLMaterial';
+
+        // 添加错误处理
+        texture.addEventListener('error', () => {
+            console.warn(`Texture failed to load: ${texture.name}`);
+            material.map = null;
+            material.color.setHex(0xcccccc);
+            material.needsUpdate = true;
+        });
 
         return material;
     }
